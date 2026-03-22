@@ -2,94 +2,135 @@
 
 ## Descrição Geral
 
-Este script SQL cria uma tabela agregada de vendas diárias (`refined_daily_sales`) a partir dos dados de pedidos confiáveis. O objetivo é consolidar informações de vendas por data, fornecendo métricas essenciais para análise de desempenho comercial diário.
+Este script SQL cria uma tabela agregada de vendas diárias (`refined_daily_sales`) a partir dos dados de pedidos confiáveis. O objetivo é consolidar métricas de vendas por data, fornecendo uma visão resumida do desempenho comercial diário da organização.
 
 ## Tabelas Envolvidas
 
-### Tabela de Origem
-- `trusted_orders` — Tabela fonte contendo os dados de pedidos validados e confiáveis
-
-### Tabela de Destino
-- `refined_daily_sales` — Tabela agregada criada por este script, armazenando métricas diárias de vendas
+| Tabela | Tipo | Descrição |
+|--------|------|-----------|
+| `refined_daily_sales` | Destino | Tabela criada para armazenar as métricas agregadas de vendas diárias |
+| `trusted_orders` | Origem | Tabela fonte contendo os dados de pedidos validados e confiáveis |
 
 ## Colunas
 
-### Colunas de Entrada (trusted_orders)
-- `order_date` — Data do pedido, utilizada como chave de agrupamento
-- `order_id` — Identificador único do pedido, usado para contagem de pedidos distintos
-- `total_amount` — Valor total do pedido, somado para calcular vendas diárias
-- `load_timestamp` — Timestamp de carga dos dados, usado para rastrear a atualização mais recente
+### Tabela de Origem (`trusted_orders`)
 
-### Colunas de Saída (refined_daily_sales)
-- `order_date` — Data de referência das vendas
-- `number_of_orders` — Quantidade de pedidos únicos realizados no dia
-- `total_daily_sales` — Valor total de vendas acumuladas no dia
-- `latest_load_timestamp` — Timestamp da carga mais recente dos dados daquele dia
+| Coluna | Tipo de Uso | Descrição |
+|--------|-------------|-----------|
+| `order_date` | Agrupamento | Data do pedido utilizada para agregação diária |
+| `order_id` | Contagem Distinta | Identificador único do pedido |
+| `total_amount` | Agregação (Soma) | Valor total do pedido |
+| `load_timestamp` | Agregação (Máximo) | Timestamp de carga dos dados |
+
+### Tabela de Destino (`refined_daily_sales`)
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `order_date` | Data | Data de referência das vendas |
+| `number_of_orders` | Inteiro | Quantidade total de pedidos únicos no dia |
+| `total_daily_sales` | Numérico | Soma do valor total de vendas do dia |
+| `latest_load_timestamp` | Timestamp | Timestamp mais recente de carga dos dados |
 
 ## Joins e Relacionamentos
 
-Não há joins neste script. A query opera sobre uma única tabela (`trusted_orders`).
+Não há joins neste script. A query realiza agregação direta sobre uma única tabela (`trusted_orders`).
 
 ## Filtros e Condições
 
-Não há cláusulas `WHERE` ou `HAVING` aplicadas. Todos os registros da tabela `trusted_orders` são processados e agregados.
+Não há cláusulas `WHERE` ou `HAVING` aplicadas neste script. Todos os registros da tabela `trusted_orders` são considerados na agregação.
 
 ## Transformações
 
 ### Funções de Agregação
-- **`COUNT(DISTINCT order_id)`** — Conta o número de pedidos únicos por data, evitando duplicatas
-- **`SUM(total_amount)`** — Calcula o valor total de vendas diárias somando todos os valores de pedidos
-- **`MAX(load_timestamp)`** — Identifica o timestamp mais recente de carga para cada data
+
+| Função | Coluna | Resultado | Propósito |
+|--------|--------|-----------|-----------|
+| `COUNT(DISTINCT)` | `order_id` | `number_of_orders` | Conta o número de pedidos únicos por dia |
+| `SUM()` | `total_amount` | `total_daily_sales` | Calcula o faturamento total diário |
+| `MAX()` | `load_timestamp` | `latest_load_timestamp` | Identifica o timestamp mais recente de atualização |
 
 ### Agrupamento
-- **`GROUP BY order_date`** — Agrupa todos os registros pela data do pedido, consolidando métricas por dia
+
+- **Nível de Agregação:** Diário
+- **Chave de Agrupamento:** `order_date`
+- **Granularidade:** Uma linha por data única
 
 ## Parâmetros/Variáveis
 
-Não há parâmetros ou variáveis definidos neste script.
+Este script não utiliza parâmetros ou variáveis. É uma query estática de criação de tabela.
 
 ## Fluxo de Dados
 
 ```
-trusted_orders
-      ↓
-[Agrupamento por order_date]
-      ↓
-[Agregações: COUNT DISTINCT, SUM, MAX]
-      ↓
-refined_daily_sales
+┌─────────────────┐
+│ trusted_orders  │
+│  (Fonte)        │
+└────────┬────────┘
+         │
+         ▼
+   ┌──────────────────┐
+   │  GROUP BY        │
+   │  order_date      │
+   └────────┬─────────┘
+            │
+            ▼
+   ┌──────────────────┐
+   │  Agregações:     │
+   │  - COUNT         │
+   │  - SUM           │
+   │  - MAX           │
+   └────────┬─────────┘
+            │
+            ▼
+┌────────────────────────┐
+│ refined_daily_sales    │
+│  (Destino)             │
+└────────────────────────┘
 ```
 
-1. **Extração**: Leitura de todos os registros da tabela `trusted_orders`
-2. **Agrupamento**: Dados são agrupados por `order_date`
-3. **Agregação**: Para cada data, são calculadas:
-   - Quantidade de pedidos únicos
-   - Soma total de vendas
-   - Timestamp mais recente de carga
-4. **Criação**: Tabela `refined_daily_sales` é criada com os resultados agregados
+### Descrição do Fluxo
+
+1. **Extração:** Leitura de todos os registros da tabela `trusted_orders`
+2. **Agrupamento:** Dados são agrupados por `order_date`
+3. **Agregação:** Aplicação das funções de agregação para cada grupo
+4. **Criação:** Materialização dos resultados na tabela `refined_daily_sales`
 
 ## Observações
 
-### Características
-- **Camada de Dados**: Este script faz parte da camada **Refined** (dados refinados/agregados), processando dados da camada **Trusted** (dados confiáveis)
-- **Tipo de Operação**: `CREATE TABLE` — cria uma nova tabela; executar novamente causará erro se a tabela já existir
+### Pontos de Atenção
+
+- ⚠️ **CREATE TABLE:** O script utiliza `CREATE TABLE` sem verificação de existência. Se a tabela já existir, ocorrerá erro. Considere usar `CREATE OR REPLACE TABLE` ou `DROP TABLE IF EXISTS` antes da criação.
+
+- ������ **Atualização:** Este script não possui lógica incremental. Cada execução recria a tabela completamente, o que pode ser ineficiente para grandes volumes de dados.
+
+- ������ **Qualidade de Dados:** A contagem usa `COUNT(DISTINCT order_id)`, o que é adequado para evitar duplicatas, mas pressupõe que `order_id` é único por pedido.
 
 ### Possíveis Otimizações
-- Considerar usar `CREATE TABLE IF NOT EXISTS` ou `CREATE OR REPLACE TABLE` dependendo do SGBD
-- Adicionar índice em `order_date` para consultas futuras mais rápidas
-- Implementar como `CREATE TABLE AS SELECT` (CTAS) com particionamento por data, se o volume for grande
 
-### Recomendações
-- **Incremental Load**: Para ambientes de produção, considerar implementar carga incremental ao invés de recriar toda a tabela
-- **Validação de Dados**: Adicionar filtros para excluir datas nulas ou inválidas
-- **Documentação de Negócio**: Definir claramente o fuso horário considerado para `order_date`
+1. **Implementar carga incremental:**
+   ```sql
+   INSERT INTO refined_daily_sales
+   SELECT ... FROM trusted_orders
+   WHERE order_date > (SELECT MAX(order_date) FROM refined_daily_sales);
+   ```
+
+2. **Adicionar índices:**
+   ```sql
+   CREATE INDEX idx_order_date ON refined_daily_sales(order_date);
+   ```
+
+3. **Incluir validações:**
+   - Verificar valores nulos em `order_date`
+   - Validar valores negativos em `total_amount`
 
 ### Dependências
-- **Upstream**: Depende da existência e população da tabela `trusted_orders`
-- **Downstream**: Pode ser utilizada por dashboards, relatórios gerenciais e análises de tendências de vendas
+
+- **Upstream:** `trusted_orders` (deve existir e estar populada)
+- **Downstream:** Relatórios e dashboards que consomem métricas diárias de vendas
 
 ### Casos de Uso
-- Análise de performance de vendas diárias
-- Identificação de tendências e sazonalidades
-- Base para KPIs de vendas
-- Fonte para dashboards executivos
+
+- Análise de tendências de vendas
+- Relatórios gerenciais diários
+- Dashboards de performance comercial
+- Base para cálculos de KPIs (médias, crescimento, etc.)
