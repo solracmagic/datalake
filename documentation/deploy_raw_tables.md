@@ -2,189 +2,162 @@
 
 ## Descrição Geral
 
-Script DDL (Data Definition Language) responsável por criar a estrutura completa da **camada RAW** do data warehouse. Este script implementa o padrão de ingestão de dados brutos, onde todas as colunas são armazenadas como strings (VARCHAR/TEXT) para preservar os dados originais sem transformações, permitindo rastreabilidade e reprocessamento futuro.
-
-O script segue uma abordagem idempotente, removendo tabelas existentes antes da criação para permitir re-execuções seguras.
-
----
+Script de implantação responsável por criar todas as tabelas da camada RAW (camada de dados brutos) do sistema. Este script implementa uma estratégia de recriação completa das tabelas, removendo estruturas existentes antes de criar novas versões. A camada RAW armazena dados em seu formato original, sem transformações, utilizando tipos de dados flexíveis (principalmente `VARCHAR` e `TEXT`) para acomodar diferentes formatos de entrada.
 
 ## Tabelas Envolvidas
 
 ### Tabelas Criadas
 
-1. `raw_customers` — Dados brutos de clientes
-2. `raw_products` — Dados brutos de produtos
-3. `raw_orders` — Dados brutos de pedidos
-4. `raw_order_items` — Dados brutos de itens de pedidos
+- `raw_customers` — Armazena dados brutos de clientes
+- `raw_products` — Armazena dados brutos de produtos
+- `raw_orders` — Armazena dados brutos de pedidos
+- `raw_order_items` — Armazena dados brutos de itens de pedidos
 
----
+## Colunas
 
-## Estrutura das Tabelas
+### Tabela `raw_customers`
 
-### 1. `raw_customers`
-
-Armazena informações brutas de clientes do sistema.
-
-| Coluna | Tipo | Descrição |
+| Coluna | Tipo | Propósito |
 |--------|------|-----------|
-| `customer_id` | VARCHAR(50) | Identificador único do cliente (formato original) |
+| `customer_id` | VARCHAR(50) | Identificador único do cliente |
 | `first_name` | VARCHAR(100) | Primeiro nome do cliente |
 | `last_name` | VARCHAR(100) | Sobrenome do cliente |
-| `email` | VARCHAR(255) | Endereço de e-mail |
-| `registration_timestamp` | VARCHAR(255) | Data/hora de registro (formato string original) |
-| `address_raw` | TEXT | Endereço completo sem estruturação |
-| `load_timestamp` | TIMESTAMP | Data/hora de carga dos dados (gerado automaticamente) |
+| `email` | VARCHAR(255) | Endereço de e-mail do cliente |
+| `registration_timestamp` | VARCHAR(255) | Data/hora de registro (formato string) |
+| `address_raw` | TEXT | Endereço completo em formato bruto |
+| `load_timestamp` | TIMESTAMP | Data/hora de carga dos dados (automático) |
 
-### 2. `raw_products`
+### Tabela `raw_products`
 
-Armazena informações brutas de produtos do catálogo.
-
-| Coluna | Tipo | Descrição |
+| Coluna | Tipo | Propósito |
 |--------|------|-----------|
 | `product_id` | VARCHAR(50) | Identificador único do produto |
 | `product_name` | VARCHAR(255) | Nome do produto |
-| `category_raw` | VARCHAR(100) | Categoria do produto (formato original) |
-| `price_string` | VARCHAR(50) | Preço em formato string (sem conversão numérica) |
-| `stock_quantity_string` | VARCHAR(50) | Quantidade em estoque (formato string) |
-| `load_timestamp` | TIMESTAMP | Data/hora de carga dos dados |
+| `category_raw` | VARCHAR(100) | Categoria do produto em formato bruto |
+| `price_string` | VARCHAR(50) | Preço em formato string |
+| `stock_quantity_string` | VARCHAR(50) | Quantidade em estoque em formato string |
+| `load_timestamp` | TIMESTAMP | Data/hora de carga dos dados (automático) |
 
-### 3. `raw_orders`
+### Tabela `raw_orders`
 
-Armazena informações brutas de pedidos realizados.
-
-| Coluna | Tipo | Descrição |
+| Coluna | Tipo | Propósito |
 |--------|------|-----------|
 | `order_id` | VARCHAR(50) | Identificador único do pedido |
-| `customer_id` | VARCHAR(50) | Identificador do cliente (chave estrangeira lógica) |
-| `order_date_string` | VARCHAR(50) | Data do pedido (formato string original) |
-| `total_amount_string` | VARCHAR(50) | Valor total do pedido (formato string) |
+| `customer_id` | VARCHAR(50) | Referência ao cliente (sem FK) |
+| `order_date_string` | VARCHAR(50) | Data do pedido em formato string |
+| `total_amount_string` | VARCHAR(50) | Valor total em formato string |
 | `status` | VARCHAR(50) | Status do pedido |
-| `load_timestamp` | TIMESTAMP | Data/hora de carga dos dados |
+| `load_timestamp` | TIMESTAMP | Data/hora de carga dos dados (automático) |
 
-### 4. `raw_order_items`
+### Tabela `raw_order_items`
 
-Armazena informações brutas dos itens individuais de cada pedido.
-
-| Coluna | Tipo | Descrição |
+| Coluna | Tipo | Propósito |
 |--------|------|-----------|
-| `order_item_id` | VARCHAR(50) | Identificador único do item do pedido |
-| `order_id` | VARCHAR(50) | Identificador do pedido (chave estrangeira lógica) |
-| `product_id` | VARCHAR(50) | Identificador do produto (chave estrangeira lógica) |
-| `quantity_string` | VARCHAR(50) | Quantidade do produto (formato string) |
-| `unit_price_string` | VARCHAR(50) | Preço unitário (formato string) |
-| `load_timestamp` | TIMESTAMP | Data/hora de carga dos dados |
-
----
+| `order_item_id` | VARCHAR(50) | Identificador único do item |
+| `order_id` | VARCHAR(50) | Referência ao pedido (sem FK) |
+| `product_id` | VARCHAR(50) | Referência ao produto (sem FK) |
+| `quantity_string` | VARCHAR(50) | Quantidade em formato string |
+| `unit_price_string` | VARCHAR(50) | Preço unitário em formato string |
+| `load_timestamp` | TIMESTAMP | Data/hora de carga dos dados (automático) |
 
 ## Joins e Relacionamentos
 
-### Relacionamentos Lógicos (não implementados via FK)
+**Não há joins neste script**, pois trata-se apenas de criação de estruturas.
 
-```
-raw_customers (1) ──────< (N) raw_orders
-                              │
-                              │
-                              └──────< (N) raw_order_items >────── (N) raw_products
-```
+### Relacionamentos Implícitos (sem constraints)
 
-**Observação:** As tabelas RAW não possuem constraints de chave estrangeira implementadas, mantendo flexibilidade para ingestão de dados inconsistentes ou incompletos.
+- `raw_orders.customer_id` → `raw_customers.customer_id`
+- `raw_order_items.order_id` → `raw_orders.order_id`
+- `raw_order_items.product_id` → `raw_products.product_id`
 
----
+> **Nota:** Os relacionamentos não são implementados via Foreign Keys na camada RAW, permitindo maior flexibilidade na ingestão de dados.
 
 ## Filtros e Condições
 
-### Condições de Drop
-
-```sql
-DROP TABLE IF EXISTS [table_name]
-```
-
-- Utiliza `IF EXISTS` para evitar erros caso as tabelas não existam
-- Ordem de drop respeita dependências lógicas (inversa à criação)
-
----
+Não há cláusulas `WHERE`, `HAVING` ou outras condições neste script.
 
 ## Transformações
 
-### Padrões de Design Aplicados
+### Valores Padrão
 
-1. **Tipagem Flexível**: Todos os campos de dados de negócio são VARCHAR/TEXT
-2. **Auditoria Automática**: Coluna `load_timestamp` com valor padrão `CURRENT_TIMESTAMP`
-3. **Nomenclatura Descritiva**: Sufixos `_string` e `_raw` indicam dados não processados
+- Todas as tabelas incluem `load_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP` para rastreamento automático do momento de inserção dos dados.
 
-### Campos com Default
+### Estratégia de Tipos de Dados
 
-- `load_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP` — Registra automaticamente o momento da inserção
+- **Dados numéricos** armazenados como `VARCHAR` (ex: `price_string`, `quantity_string`)
+- **Datas** armazenadas como `VARCHAR` (ex: `order_date_string`, `registration_timestamp`)
+- **Endereços complexos** armazenados como `TEXT` (ex: `address_raw`)
 
----
+Esta abordagem permite:
+- Aceitar dados em diversos formatos
+- Evitar erros de conversão na ingestão
+- Postergar validação e transformação para camadas superiores
 
 ## Parâmetros/Variáveis
 
-**Nenhum parâmetro ou variável** é utilizado neste script. Trata-se de um script DDL estático.
-
----
+Este script não utiliza parâmetros ou variáveis. É um script DDL estático.
 
 ## Fluxo de Dados
 
-```mermaid
-graph TD
-    A[Início da Execução] --> B[Drop raw_order_items]
-    B --> C[Drop raw_orders]
-    C --> D[Drop raw_products]
-    D --> E[Drop raw_customers]
-    E --> F[Create raw_customers]
-    F --> G[Create raw_products]
-    G --> H[Create raw_orders]
-    H --> I[Create raw_order_items]
-    I --> J[Estrutura RAW Pronta]
 ```
-
-### Sequência de Execução
-
-1. **Limpeza**: Remove tabelas existentes em ordem reversa de dependência
-2. **Criação**: Cria tabelas na ordem de dependência lógica
-3. **Resultado**: Camada RAW pronta para receber dados de fontes externas
-
----
+┌─────────────────────────────────────┐
+│  1. DROP TABLE IF EXISTS (4 tabelas)│
+│     - Remoção segura de estruturas  │
+│       existentes                     │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  2. CREATE TABLE raw_customers      │
+│     - Estrutura base de clientes    │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  3. CREATE TABLE raw_products       │
+│     - Estrutura base de produtos    │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  4. CREATE TABLE raw_orders         │
+│     - Estrutura base de pedidos     │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  5. CREATE TABLE raw_order_items    │
+│     - Estrutura de itens de pedidos │
+└─────────────────────────────────────┘
+```
 
 ## Observações
 
-### ✅ Boas Práticas Implementadas
+### Características da Camada RAW
 
-- **Idempotência**: Script pode ser executado múltiplas vezes sem erros
-- **Auditoria**: Rastreamento temporal via `load_timestamp`
-- **Preservação de Dados**: Formato original mantido para troubleshooting
-- **Nomenclatura Clara**: Prefixo `raw_` identifica a camada de dados
+- **Sem constraints**: Não há Primary Keys, Foreign Keys ou constraints de validação
+- **Tipos flexíveis**: Uso extensivo de `VARCHAR` e `TEXT` para máxima compatibilidade
+- **Idempotência**: Script pode ser executado múltiplas vezes devido aos `DROP TABLE IF EXISTS`
+- **Auditoria**: Coluna `load_timestamp` em todas as tabelas para rastreabilidade
 
-### ⚠️ Considerações Importantes
+### Possíveis Otimizações
 
-1. **Sem Constraints**: Não há PKs, FKs ou checks implementados
-2. **Sem Índices**: Performance de consulta não é otimizada nesta camada
-3. **Dados Não Validados**: Aceita qualquer valor, incluindo nulos e duplicatas
-4. **Tipagem Genérica**: Conversões de tipo devem ocorrer em camadas superiores (STAGING/TRUSTED)
+1. **Adicionar índices** em colunas de ID após carga inicial para melhorar performance de queries
+2. **Implementar particionamento** por `load_timestamp` se o volume de dados for muito grande
+3. **Considerar compressão** de colunas `TEXT` dependendo do SGBD utilizado
 
-### 🔧 Possíveis Otimizações
+### Dependências
 
-- Adicionar índices em colunas de join (`customer_id`, `order_id`, `product_id`) se consultas diretas forem frequentes
-- Implementar particionamento por `load_timestamp` para grandes volumes
-- Considerar compressão de colunas TEXT para economia de espaço
-- Adicionar comentários nas tabelas/colunas usando `COMMENT ON`
+- **Nenhuma dependência externa**: Script autossuficiente
+- **Ordem de execução**: Importante manter a ordem de DROP (inversa à criação) para evitar problemas com dependências futuras
 
-### 📦 Dependências
+### Próximos Passos Sugeridos
 
-- **Nenhuma dependência externa** — Script autossuficiente
-- **Ordem de execução**: Deve ser o primeiro script da pipeline de dados
-- **Camadas subsequentes**: STAGING → TRUSTED → ANALYTICS
+1. Criar scripts de carga (ETL) para popular estas tabelas
+2. Desenvolver camada STAGING com validações e transformações
+3. Implementar camada TRUSTED com dados limpos e tipados corretamente
+4. Adicionar procedures de validação de qualidade de dados
 
-### 🎯 Uso Recomendado
+### Compatibilidade
 
-Este script deve ser executado:
-- Na inicialização do ambiente de dados
-- Após mudanças estruturais no modelo RAW
-- Em ambientes de desenvolvimento/teste para reset de estrutura
-
----
-
-**Versão da Documentação**: 1.0  
-**Última Atualização**: 2024  
-**Camada**: RAW (Bronze Layer)
+Este script é compatível com a maioria dos SGBDs relacionais (PostgreSQL, MySQL, SQL Server, etc.), com possíveis ajustes menores na sintaxe de tipos de dados.
