@@ -2,7 +2,7 @@
 
 ## Descrição Geral
 
-Este arquivo SQL define a estrutura da tabela `raw_orders` na camada **raw** (bronze) de um data warehouse. A tabela é projetada para armazenar dados brutos de pedidos sem transformações, mantendo formatos originais como strings para posterior processamento nas camadas superiores (staging/silver ou analytics/gold).
+Este script SQL define a estrutura da tabela `raw_orders` na camada **raw** (bronze) de um data warehouse. A tabela é projetada para armazenar dados brutos de pedidos sem transformações, mantendo formatos originais como strings para campos que posteriormente serão convertidos em tipos de dados apropriados nas camadas subsequentes (staging/silver ou analytics/gold).
 
 ## Tipo de Operação
 
@@ -12,98 +12,108 @@ Este arquivo SQL define a estrutura da tabela `raw_orders` na camada **raw** (br
 
 ### `raw_orders`
 
-Tabela de armazenamento de dados brutos de pedidos do sistema transacional.
+Tabela de armazenamento de dados brutos de pedidos do sistema fonte.
 
 ## Colunas
 
 | Coluna | Tipo de Dado | Descrição | Observações |
 |--------|--------------|-----------|-------------|
-| `order_id` | VARCHAR(50) | Identificador único do pedido | Chave primária lógica |
-| `customer_id` | VARCHAR(50) | Identificador do cliente que realizou o pedido | Chave estrangeira lógica para tabela de clientes |
-| `order_date_string` | VARCHAR(50) | Data do pedido em formato string | Mantido como string na camada raw para preservar formato original |
-| `total_amount_string` | VARCHAR(50) | Valor total do pedido em formato string | Mantido como string na camada raw para preservar formato original |
-| `status` | VARCHAR(100) | Status atual do pedido | Ex: "pending", "completed", "cancelled" |
-| `load_timestamp` | TIMESTAMP | Data e hora de carga do registro | Valor padrão: timestamp atual da inserção |
+| `order_id` | `VARCHAR(50)` | Identificador único do pedido | Chave primária natural (não declarada) |
+| `customer_id` | `VARCHAR(50)` | Identificador do cliente que realizou o pedido | Chave estrangeira para tabela de clientes |
+| `order_date_string` | `VARCHAR(50)` | Data do pedido em formato string | Armazenada como texto para preservar formato original |
+| `total_amount_string` | `VARCHAR(50)` | Valor total do pedido em formato string | Armazenada como texto para preservar formato original |
+| `status` | `VARCHAR(100)` | Status atual do pedido | Ex: "pending", "completed", "cancelled" |
+| `load_timestamp` | `TIMESTAMP` | Data e hora de carga do registro | Valor padrão: timestamp atual da inserção |
 
-## Características de Design
+## Tabelas Envolvidas
 
-### Camada Raw (Bronze)
+- **`raw_orders`** (tabela sendo criada)
 
-- **Preservação de Dados Originais**: Campos como `order_date_string` e `total_amount_string` são mantidos como VARCHAR para preservar o formato exato dos dados de origem
-- **Auditoria**: Coluna `load_timestamp` com valor padrão automático para rastreabilidade
-- **Sem Constraints**: Não há definição explícita de chaves primárias ou estrangeiras, permitindo flexibilidade na ingestão
+## Joins e Relacionamentos
 
-### Padrões Aplicados
+Não aplicável - este é um script de criação de tabela (DDL).
 
-- **Nomenclatura**: Sufixo `_string` indica campos que serão convertidos em camadas posteriores
-- **Rastreabilidade**: `load_timestamp` permite identificar quando cada registro foi carregado
-- **Flexibilidade**: Tipos VARCHAR amplos permitem receber diversos formatos sem rejeição
+**Relacionamentos esperados:**
+- `customer_id` → Relaciona-se com tabela de clientes (raw_customers ou similar)
+- Esta tabela serve como fonte para tabelas transformadas em camadas superiores
+
+## Filtros e Condições
+
+Não aplicável - script DDL sem queries de seleção.
+
+## Transformações
+
+Não aplicável neste script. As transformações ocorrerão em etapas posteriores do pipeline:
+- Conversão de `order_date_string` para tipo `DATE` ou `TIMESTAMP`
+- Conversão de `total_amount_string` para tipo `DECIMAL` ou `NUMERIC`
+- Validação e limpeza de dados
+
+## Parâmetros/Variáveis
+
+Não há parâmetros ou variáveis neste script.
 
 ## Fluxo de Dados
 
 ```
-Sistema Transacional → raw_orders (camada raw) → staging_orders (camada staging) → dim_orders/fact_orders (camada analytics)
+Sistema Fonte (ERP/CRM)
+         ↓
+    [Extração]
+         ↓
+   raw_orders (camada raw/bronze)
+         ↓
+   [Transformação ETL]
+         ↓
+Camada Staging/Silver → Camada Analytics/Gold
 ```
 
-1. **Ingestão**: Dados são extraídos do sistema fonte e carregados sem transformação
-2. **Armazenamento**: Registros mantêm formato original (strings, sem validação)
-3. **Timestamp**: Cada carga recebe automaticamente o timestamp de inserção
-4. **Processamento Futuro**: Dados serão transformados em camadas subsequentes (conversão de tipos, validações, limpeza)
+### Características da Camada Raw:
 
-## Relacionamentos Lógicos
-
-- **`customer_id`** → Relaciona-se com tabela de clientes (raw_customers ou similar)
-- **`order_id`** → Pode relacionar-se com tabela de itens de pedido (raw_order_items)
+1. **Preservação de dados originais**: Campos como datas e valores monetários são mantidos como strings
+2. **Auditoria**: Campo `load_timestamp` permite rastreabilidade
+3. **Sem transformações**: Dados armazenados exatamente como recebidos da fonte
 
 ## Observações
 
-### Boas Práticas Implementadas
+### ⚠️ Pontos de Atenção
 
-✅ Separação clara de camadas (raw/bronze)  
-✅ Auditoria com `load_timestamp`  
-✅ Nomenclatura descritiva indicando tipo de dado original  
-✅ Preservação de dados brutos para troubleshooting
+1. **Ausência de chave primária**: A tabela não declara `order_id` como `PRIMARY KEY`, o que pode permitir duplicatas
+2. **Ausência de constraints**: Não há validações de `NOT NULL` ou `UNIQUE`
+3. **Tipos genéricos**: Uso de `VARCHAR` para todos os campos textuais pode consumir mais espaço
 
-### Melhorias Sugeridas
+### ������ Sugestões de Melhoria
 
-⚠️ **Adicionar Primary Key**: Considerar adicionar constraint de PK em `order_id`
 ```sql
-ALTER TABLE raw_orders ADD PRIMARY KEY (order_id);
-```
-
-⚠️ **Adicionar Índices**: Para melhor performance em consultas
-```sql
-CREATE INDEX idx_customer_id ON raw_orders(customer_id);
-CREATE INDEX idx_load_timestamp ON raw_orders(load_timestamp);
-```
-
-⚠️ **Adicionar Coluna de Origem**: Para rastreabilidade de fonte de dados
-```sql
-ALTER TABLE raw_orders ADD COLUMN source_system VARCHAR(100);
-```
-
-⚠️ **Particionamento**: Considerar particionamento por `load_timestamp` para grandes volumes
-```sql
--- Exemplo para PostgreSQL
+-- Versão otimizada sugerida:
 CREATE TABLE raw_orders (
-    ...
-) PARTITION BY RANGE (load_timestamp);
+    order_id VARCHAR(50) PRIMARY KEY,
+    customer_id VARCHAR(50) NOT NULL,
+    order_date_string VARCHAR(50),
+    total_amount_string VARCHAR(50),
+    status VARCHAR(100),
+    load_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    source_system VARCHAR(50), -- Identificar sistema de origem
+    batch_id VARCHAR(100) -- Rastrear lote de carga
+);
+
+-- Índices recomendados:
+CREATE INDEX idx_raw_orders_customer ON raw_orders(customer_id);
+CREATE INDEX idx_raw_orders_load_ts ON raw_orders(load_timestamp);
 ```
 
-### Dependências
+### ������ Dependências
 
-- **Upstream**: Sistema transacional de origem (ERP, e-commerce, etc.)
-- **Downstream**: Tabelas de staging/silver que consumirão estes dados brutos
+- **Upstream**: Sistema fonte de pedidos (ERP, e-commerce, etc.)
+- **Downstream**: Tabelas de staging/transformação (ex: `stg_orders`, `dim_orders`)
 
-### Considerações de Qualidade de Dados
+### ������ Padrão de Arquitetura
 
-- Dados podem conter inconsistências (formato de data variável, valores nulos, etc.)
-- Validações e limpezas devem ser aplicadas nas camadas subsequentes
-- `load_timestamp` permite identificar lotes de carga para troubleshooting
+Esta tabela segue o padrão **Medallion Architecture**:
+- **Bronze/Raw Layer**: Armazenamento de dados brutos sem transformação
+- Preparação para processamento nas camadas Silver (staging) e Gold (analytics)
 
----
+### ������ Casos de Uso
 
-**Camada**: Raw/Bronze  
-**Categoria**: Transacional  
-**Domínio**: Vendas/Pedidos  
-**Última Atualização da Documentação**: 2025
+- Auditoria e rastreamento de dados originais
+- Reprocessamento de dados em caso de falhas
+- Análise de qualidade de dados na origem
+- Histórico completo de cargas
