@@ -2,95 +2,106 @@
 
 ## Descrição Geral
 
-Este script SQL define a estrutura da tabela `raw_order_items`, que armazena dados brutos de itens de pedidos em sua forma original, sem transformações. Esta tabela faz parte da camada **raw** (bronze) de uma arquitetura de data warehouse, onde os dados são mantidos em seu formato mais próximo da fonte original, incluindo tipos de dados como strings para valores numéricos que serão posteriormente transformados em camadas superiores.
+Este script SQL define a estrutura da tabela `raw_order_items`, que armazena dados brutos de itens de pedidos em sua forma original, sem transformações. Esta tabela faz parte da camada **raw** (bronze) de uma arquitetura de dados em camadas, onde os dados são ingeridos exatamente como recebidos da fonte, preservando tipos de dados originais como strings para posterior validação e transformação.
 
-## Tabelas Envolvidas
+## Tipo de Operação
 
-- `raw_order_items` — Tabela de destino sendo criada
+**DDL (Data Definition Language)** - Criação de tabela
+
+## Estrutura da Tabela
+
+### Tabela Criada
+- `raw_order_items`
 
 ## Colunas
 
-| Coluna | Tipo de Dado | Descrição |
-|--------|--------------|-----------|
-| `order_item_id` | VARCHAR(50) | Identificador único do item do pedido |
-| `order_id` | VARCHAR(50) | Identificador do pedido ao qual o item pertence (chave estrangeira lógica) |
-| `product_id` | VARCHAR(50) | Identificador do produto associado ao item |
-| `quantity_string` | VARCHAR(50) | Quantidade do produto armazenada como string na camada raw |
-| `unit_price_string` | VARCHAR(50) | Preço unitário do produto armazenado como string na camada raw |
-| `load_timestamp` | TIMESTAMP | Data e hora de carregamento do registro (valor padrão: timestamp atual) |
+| Coluna | Tipo de Dado | Descrição | Constraints |
+|--------|--------------|-----------|-------------|
+| `order_item_id` | VARCHAR(50) | Identificador único do item do pedido | - |
+| `order_id` | VARCHAR(50) | Identificador do pedido ao qual o item pertence | - |
+| `product_id` | VARCHAR(50) | Identificador do produto | - |
+| `quantity_string` | VARCHAR(50) | Quantidade do produto como string (formato bruto) | - |
+| `unit_price_string` | VARCHAR(50) | Preço unitário do produto como string (formato bruto) | - |
+| `load_timestamp` | TIMESTAMP | Data e hora de carregamento do registro | DEFAULT CURRENT_TIMESTAMP |
 
-## Joins e Relacionamentos
+## Características da Camada Raw
 
-Esta tabela não possui joins definidos no script de criação, mas estabelece relacionamentos lógicos com outras tabelas:
+### Preservação de Dados Originais
+- **Campos numéricos como strings**: `quantity_string` e `unit_price_string` são armazenados como VARCHAR para preservar o formato original dos dados
+- **Sem validações**: Não há constraints de chave primária, chave estrangeira ou validações de dados
+- **Auditoria**: Coluna `load_timestamp` registra automaticamente quando cada registro foi inserido
 
-- **Relacionamento com pedidos**: `order_id` referencia a tabela de pedidos (provavelmente `raw_orders`)
-- **Relacionamento com produtos**: `product_id` referencia a tabela de produtos (provavelmente `raw_products`)
+## Relacionamentos Potenciais
 
-## Filtros e Condições
+Embora não haja constraints definidos nesta camada, os relacionamentos lógicos esperados são:
 
-Não há filtros ou condições aplicados neste script de criação de tabela.
-
-## Transformações
-
-Não há transformações aplicadas nesta camada. As seguintes características são notáveis:
-
-- **Preservação de formato original**: Campos numéricos (`quantity_string`, `unit_price_string`) são mantidos como VARCHAR para preservar o formato original dos dados de origem
-- **Auditoria automática**: Uso de `DEFAULT CURRENT_TIMESTAMP` para rastreamento automático do momento de inserção dos dados
-
-## Parâmetros/Variáveis
-
-Não há parâmetros ou variáveis definidos neste script.
+- `order_id` → Relaciona-se com a tabela de pedidos (ex: `raw_orders`)
+- `product_id` → Relaciona-se com a tabela de produtos (ex: `raw_products`)
+- `order_item_id` → Identificador único que pode ser usado como chave primária em camadas superiores
 
 ## Fluxo de Dados
 
 ```
-Fonte de Dados (Sistema Transacional/API/Arquivo)
-    ↓
-raw_order_items (Camada Raw/Bronze)
-    ↓
-[Próximas camadas: Staging/Silver → Curated/Gold]
+Fonte de Dados (API/Arquivo/Sistema Externo)
+            ↓
+    raw_order_items (Camada Raw/Bronze)
+            ↓
+    [Próxima camada: Staging/Silver]
+    (Transformações e validações)
 ```
 
-1. **Ingestão**: Dados brutos são carregados diretamente da fonte
-2. **Armazenamento**: Dados são armazenados sem transformação, preservando tipos originais
-3. **Timestamp**: Cada registro recebe automaticamente um timestamp de carga
-4. **Processamento futuro**: Dados serão consumidos por processos ETL/ELT para transformação em camadas superiores
+### Processo Esperado
+
+1. **Ingestão**: Dados são carregados da fonte externa sem transformação
+2. **Timestamp**: Registro automático do momento de carga via `load_timestamp`
+3. **Preservação**: Dados numéricos mantidos como string para validação posterior
+4. **Próximos passos**: Dados serão transformados em camadas subsequentes (staging/silver)
 
 ## Observações
 
 ### Boas Práticas Implementadas
-- ✅ Uso de camada raw para preservação de dados originais
-- ✅ Auditoria com `load_timestamp` para rastreabilidade
-- ✅ Comentários explicativos sobre campos em formato string
+✅ Nomenclatura clara indicando camada raw  
+✅ Sufixo `_string` para campos que serão convertidos posteriormente  
+✅ Timestamp de auditoria automático  
+✅ Tamanho adequado para VARCHAR (50 caracteres)
 
-### Pontos de Atenção
-- ⚠️ **Ausência de chaves primárias**: Não há definição de PRIMARY KEY para `order_item_id`
-- ⚠️ **Ausência de chaves estrangeiras**: Relacionamentos não são enforçados no nível de banco de dados
-- ⚠️ **Ausência de constraints**: Não há validações de NOT NULL ou UNIQUE
-- ⚠️ **Tipos de dados genéricos**: VARCHAR(50) pode ser insuficiente para alguns cenários
+### Considerações Importantes
 
-### Recomendações de Otimização
-1. **Adicionar constraints**:
-   ```sql
-   ALTER TABLE raw_order_items 
-   ADD CONSTRAINT pk_raw_order_items PRIMARY KEY (order_item_id);
-   ```
+- **Sem Primary Key**: A ausência de PK é intencional na camada raw para permitir duplicatas e facilitar troubleshooting
+- **Sem Foreign Keys**: Relacionamentos não são enforçados nesta camada
+- **Tipos de Dados**: A conversão de `quantity_string` e `unit_price_string` para tipos numéricos deve ocorrer em camadas superiores
+- **Validação**: Dados inválidos ou nulos devem ser tratados em processos ETL subsequentes
 
-2. **Adicionar índices** para melhorar performance de consultas:
-   ```sql
-   CREATE INDEX idx_order_id ON raw_order_items(order_id);
-   CREATE INDEX idx_product_id ON raw_order_items(product_id);
-   ```
+### Próximas Etapas Recomendadas
 
-3. **Considerar particionamento** por `load_timestamp` se o volume de dados for alto
+1. Criar tabela staging/silver com conversões de tipo:
+   - `quantity_string` → `quantity` (INTEGER)
+   - `unit_price_string` → `unit_price` (DECIMAL/NUMERIC)
+2. Implementar validações de dados
+3. Adicionar constraints apropriados (PK, FK)
+4. Criar índices para otimização de consultas
 
-### Dependências
-- Esta tabela será consumida por processos de transformação em camadas superiores (staging/silver)
-- Depende de processos de ingestão de dados que populam a tabela
-- Relaciona-se logicamente com tabelas `raw_orders` e `raw_products`
+### Possíveis Otimizações
 
-### Uso Típico
-Esta tabela é utilizada como ponto de entrada de dados no data warehouse, servindo como:
-- Fonte para processos de ETL/ELT
-- Backup dos dados originais
-- Base para auditoria e reconciliação de dados
+- **Particionamento**: Considerar particionamento por `load_timestamp` se o volume de dados for alto
+- **Índices**: Em camadas superiores, criar índices em `order_item_id`, `order_id` e `product_id`
+- **Retenção**: Definir política de retenção de dados para a camada raw
+
+## Dependências
+
+### Tabelas Relacionadas (Esperadas)
+- `raw_orders` - Tabela de pedidos
+- `raw_products` - Tabela de produtos
+
+### Sistemas Upstream
+- Sistema de origem dos dados de pedidos (não especificado no script)
+
+### Sistemas Downstream
+- Camada staging/silver para transformação de dados
+- Processos ETL/ELT de transformação
+
+---
+
+**Versão da Documentação**: 1.0  
+**Data de Criação**: Baseado no script fornecido  
+**Camada de Dados**: Raw/Bronze (Ingestão)
