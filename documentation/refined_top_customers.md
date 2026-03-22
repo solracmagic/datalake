@@ -2,7 +2,7 @@
 
 ## Descrição Geral
 
-Este script SQL cria uma tabela materializada contendo os principais clientes com base no valor total gasto. A query seleciona os 10 clientes que mais gastaram, ordenados de forma decrescente pelo valor total de suas compras, utilizando dados previamente processados da tabela `refined_customer_lifetime_value`.
+Este script SQL cria uma tabela materializada contendo os principais clientes com base no valor total gasto. A query seleciona os 10 clientes que mais gastaram, ordenados de forma decrescente pelo valor total de compras, utilizando dados previamente processados da tabela `refined_customer_lifetime_value`.
 
 ## Tabelas Envolvidas
 
@@ -48,68 +48,80 @@ Não há parâmetros ou variáveis declarados neste script.
 
 ### Valores Configuráveis
 
-- **LIMIT 10**: Valor hardcoded que define quantos clientes serão retornados. Pode ser ajustado conforme necessidade do negócio.
+- **LIMIT 10**: Valor hardcoded que define quantos top clientes serão retornados. Pode ser ajustado conforme necessidade do negócio.
 
 ## Fluxo de Dados
 
 ```
 refined_customer_lifetime_value
-         ↓
+           ↓
     SELECT (6 colunas)
-         ↓
+           ↓
     ORDER BY total_spent DESC
-         ↓
-    LIMIT 10
-         ↓
-refined_top_customers (tabela criada)
+           ↓
+       LIMIT 10
+           ↓
+  refined_top_customers
 ```
 
-### Etapas do Processamento
+### Descrição do Fluxo
 
-1. **Leitura**: Acessa todos os registros da tabela `refined_customer_lifetime_value`
-2. **Ordenação**: Ordena os clientes pelo campo `total_spent` em ordem decrescente
-3. **Limitação**: Seleciona apenas os 10 primeiros registros
-4. **Criação**: Materializa os resultados na nova tabela `refined_top_customers`
+1. **Origem**: Leitura da tabela `refined_customer_lifetime_value`
+2. **Seleção**: Extração de 6 colunas principais do cliente
+3. **Ordenação**: Classificação decrescente por `total_spent`
+4. **Limitação**: Seleção apenas dos 10 primeiros registros
+5. **Destino**: Criação da tabela `refined_top_customers` com os resultados
 
 ## Observações
 
 ### Dependências
-- **Tabela Upstream**: `refined_customer_lifetime_value` deve existir e estar populada antes da execução deste script
-- Esta tabela faz parte de uma camada "refined" de um pipeline de dados
+- ⚠️ **Dependência crítica**: Esta tabela depende da existência prévia de `refined_customer_lifetime_value`
+- A execução deve ocorrer após a criação/atualização da tabela fonte
 
-### Considerações Importantes
+### Considerações de Performance
+- ✅ A query é simples e performática para volumes moderados de dados
+- ✅ O uso de `LIMIT 10` garante resultado pequeno e rápido
+- ⚠️ Considere criar índice em `total_spent` na tabela fonte para otimizar a ordenação
 
-⚠️ **Atenção**: 
-- O script utiliza `CREATE TABLE` sem verificação de existência. Se a tabela já existir, ocorrerá erro
-- Considere usar `CREATE TABLE IF NOT EXISTS` ou `CREATE OR REPLACE TABLE` dependendo do SGBD
+### Possíveis Melhorias
 
-### Possíveis Otimizações
+1. **Recriação da Tabela**: 
+   - Considere usar `DROP TABLE IF EXISTS` antes do `CREATE TABLE` para permitir re-execuções
+   - Alternativa: usar `CREATE OR REPLACE TABLE` (dependendo do SGBD)
 
-1. **Recriação Incremental**: 
-   ```sql
-   DROP TABLE IF EXISTS refined_top_customers;
-   CREATE TABLE refined_top_customers AS ...
-   ```
+2. **Parametrização**:
+   - O valor `LIMIT 10` poderia ser parametrizado para maior flexibilidade
 
-2. **Parametrização do Limite**:
-   - Tornar o valor `10` configurável via variável ou parâmetro
+3. **Versionamento**:
+   - Adicionar colunas de metadados como `created_at` ou `updated_at` para rastreabilidade
 
-3. **Índices**: 
-   - Considerar criar índice em `customer_id` para consultas futuras
-   - A tabela fonte deveria ter índice em `total_spent` para otimizar a ordenação
+4. **Materialização**:
+   - Avaliar se uma VIEW seria mais apropriada que uma TABLE, dependendo da frequência de atualização necessária
 
-4. **View Materializada**:
-   - Dependendo do SGBD, considerar usar `MATERIALIZED VIEW` para facilitar atualizações
+### Exemplo de Uso Melhorado
+
+```sql
+DROP TABLE IF EXISTS refined_top_customers;
+
+CREATE TABLE refined_top_customers AS
+SELECT
+    customer_id,
+    first_name,
+    last_name,
+    email,
+    total_spent,
+    total_orders,
+    CURRENT_TIMESTAMP AS created_at
+FROM
+    refined_customer_lifetime_value
+ORDER BY
+    total_spent DESC
+LIMIT 10;
+```
 
 ### Casos de Uso
 
 - Dashboards executivos mostrando principais clientes
-- Segmentação para campanhas de marketing VIP
+- Segmentação para campanhas VIP
 - Análise de concentração de receita
-- Relatórios de performance de vendas
-
-### Frequência de Atualização Recomendada
-
-- **Diária**: Para acompanhamento regular
-- **Semanal/Mensal**: Para análises estratégicas
-- **Tempo Real**: Se integrado a dashboards operacionais (considerar usar VIEW ao invés de TABLE)
+- Relatórios de customer success
