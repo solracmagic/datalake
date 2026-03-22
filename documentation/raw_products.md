@@ -2,36 +2,34 @@
 
 ## Descrição Geral
 
-Este arquivo SQL define a estrutura da tabela `raw_products`, que pertence à camada **raw** (bronze) de um data warehouse. Esta tabela é responsável por armazenar dados brutos de produtos conforme recebidos da fonte original, sem transformações ou validações, mantendo tipos de dados primitivos (strings) para campos que posteriormente serão convertidos em tipos mais específicos nas camadas superiores.
+Este arquivo SQL define a estrutura da tabela `raw_products`, que pertence à camada **raw** (bronze) de um data warehouse. A tabela é responsável por armazenar dados brutos de produtos conforme recebidos da fonte original, sem transformações ou validações, mantendo tipos de dados genéricos (principalmente strings) para garantir a ingestão completa dos dados.
 
 ## Tabelas Envolvidas
 
 - `raw_products` — Tabela de produtos na camada raw/bronze
 
-## Estrutura da Tabela
+## Estrutura de Colunas
 
-### Colunas
-
-| Coluna | Tipo de Dado | Descrição | Constraints |
-|--------|--------------|-----------|-------------|
-| `product_id` | `VARCHAR(50)` | Identificador único do produto na fonte de origem | - |
-| `product_name` | `VARCHAR(255)` | Nome/descrição do produto | - |
-| `category_raw` | `VARCHAR(100)` | Categoria do produto em formato bruto, sem normalização | - |
-| `price_string` | `VARCHAR(50)` | Preço do produto armazenado como string (pode conter símbolos monetários, vírgulas, etc.) | - |
-| `stock_quantity_string` | `VARCHAR(50)` | Quantidade em estoque armazenada como string (permite capturar valores não numéricos da fonte) | - |
-| `load_timestamp` | `TIMESTAMP` | Data e hora de carregamento do registro na tabela | `DEFAULT CURRENT_TIMESTAMP` |
+| Coluna | Tipo de Dado | Descrição |
+|--------|--------------|-----------|
+| `product_id` | VARCHAR(50) | Identificador único do produto (armazenado como string na camada raw) |
+| `product_name` | VARCHAR(255) | Nome/descrição do produto |
+| `category_raw` | VARCHAR(100) | Categoria do produto em formato bruto, sem padronização |
+| `price_string` | VARCHAR(50) | Preço do produto armazenado como string (pode conter símbolos de moeda, formatações diversas) |
+| `stock_quantity_string` | VARCHAR(50) | Quantidade em estoque armazenada como string (permite capturar valores não numéricos ou formatados) |
+| `load_timestamp` | TIMESTAMP | Data e hora de carregamento do registro, preenchida automaticamente com o timestamp atual |
 
 ## Joins e Relacionamentos
 
-Não aplicável — Este é um script DDL de criação de tabela, sem joins ou relacionamentos explícitos definidos.
+Não aplicável — este é um script DDL de criação de tabela, sem joins ou relacionamentos definidos.
 
 ## Filtros e Condições
 
-Não aplicável — Não há cláusulas WHERE ou condições neste script.
+Não aplicável — não há cláusulas WHERE ou condições neste script.
 
 ## Transformações
 
-Não aplicável — Esta é uma tabela raw sem transformações. Os dados são armazenados em seu formato original.
+Não aplicável — esta é uma tabela raw sem transformações. Os dados são armazenados em seu formato original.
 
 ## Parâmetros/Variáveis
 
@@ -40,74 +38,72 @@ Não há parâmetros ou variáveis neste script.
 ## Fluxo de Dados
 
 ```
-Fonte de Dados (Sistema Transacional/API/Arquivo)
-            ↓
-    [Processo de Ingestão]
-            ↓
-      raw_products (Camada Raw/Bronze)
-            ↓
-    [Próximas camadas: Staging/Silver ou Trusted/Gold]
+Fonte de Dados Original
+         ↓
+   [raw_products]
+         ↓
+(Próxima camada: staging/silver)
 ```
 
-### Descrição do Fluxo
-
-1. **Ingestão**: Dados brutos de produtos são extraídos da fonte original
-2. **Armazenamento Raw**: Dados são inseridos na tabela `raw_products` sem transformações
-3. **Timestamp Automático**: O campo `load_timestamp` registra automaticamente o momento da carga
-4. **Processamento Futuro**: Dados serão consumidos por processos ETL/ELT para transformação nas camadas subsequentes
+1. **Ingestão**: Dados brutos são carregados diretamente da fonte (API, arquivo CSV, banco transacional, etc.)
+2. **Armazenamento**: Todos os campos são armazenados como strings para evitar falhas de tipo durante a carga
+3. **Timestamp**: Cada registro recebe automaticamente um timestamp de carga
+4. **Próximo passo**: Dados serão transformados e validados em camadas subsequentes (staging/silver ou trusted/gold)
 
 ## Observações
 
-### Características da Camada Raw
+### Boas Práticas Implementadas
 
-- **Imutabilidade**: Dados devem ser mantidos em seu formato original
-- **Auditoria**: O campo `load_timestamp` permite rastreabilidade temporal
-- **Flexibilidade**: Uso de `VARCHAR` para campos numéricos permite capturar dados inconsistentes da fonte
+- ✅ **Camada Raw/Bronze**: Mantém dados no formato original sem transformações
+- ✅ **Tipos Flexíveis**: Uso de VARCHAR permite capturar dados inconsistentes ou mal formatados
+- ✅ **Auditoria**: Campo `load_timestamp` permite rastreabilidade temporal dos dados
+- ✅ **Nomenclatura Clara**: Sufixos `_raw` e `_string` indicam claramente que os dados não foram tratados
 
 ### Pontos de Atenção
 
-⚠️ **Ausência de Primary Key**: A tabela não possui chave primária definida, o que pode:
-- Permitir duplicatas
-- Dificultar operações de UPDATE/DELETE específicas
-- Impactar performance em consultas
+⚠️ **Ausência de Chave Primária**: A tabela não possui constraint de PRIMARY KEY definida. Considere adicionar:
+```sql
+ALTER TABLE raw_products ADD PRIMARY KEY (product_id, load_timestamp);
+```
 
-⚠️ **Tipos de Dados Genéricos**: 
-- `price_string` e `stock_quantity_string` são armazenados como strings
-- Requer validação e conversão nas camadas superiores (staging/trusted)
+⚠️ **Sem Validações**: Por design, não há validações (NOT NULL, CHECK, etc.), o que é apropriado para camada raw
 
-### Possíveis Otimizações
+⚠️ **Duplicatas**: Sem constraints, a tabela pode acumular registros duplicados em cargas sucessivas
 
-1. **Adicionar Primary Key**:
-   ```sql
-   ALTER TABLE raw_products ADD PRIMARY KEY (product_id, load_timestamp);
-   ```
+### Recomendações
 
-2. **Criar Índices**:
-   ```sql
-   CREATE INDEX idx_raw_products_load_timestamp ON raw_products(load_timestamp);
-   CREATE INDEX idx_raw_products_category ON raw_products(category_raw);
-   ```
-
-3. **Adicionar Particionamento** (para grandes volumes):
-   ```sql
-   -- Particionar por data de carga (sintaxe varia por SGBD)
-   PARTITION BY RANGE (load_timestamp);
-   ```
+1. **Particionamento**: Para grandes volumes, considere particionar por `load_timestamp`
+2. **Índices**: Adicionar índice em `product_id` para consultas de lookup
+3. **Retenção**: Definir política de retenção de dados (ex: manter apenas últimos 90 dias)
+4. **Próxima Camada**: Criar tabela `stg_products` ou `silver_products` com:
+   - Conversão de `price_string` para DECIMAL
+   - Conversão de `stock_quantity_string` para INTEGER
+   - Padronização de `category_raw`
+   - Validações e limpeza de dados
 
 ### Dependências
 
-- **Upstream**: Sistema fonte de dados de produtos (ERP, e-commerce, API, etc.)
-- **Downstream**: Tabelas das camadas staging/silver ou trusted/gold que consumirão estes dados brutos
+- Nenhuma dependência direta
+- Esta tabela serve como fonte para camadas downstream (staging/silver)
 
-### Boas Práticas Implementadas
+### Exemplo de Uso
 
-✅ Nomenclatura clara indicando camada raw  
-✅ Timestamp automático de carga  
-✅ Preservação de dados originais sem transformação  
-✅ Comentários inline explicativos
+```sql
+-- Inserção de dados brutos
+INSERT INTO raw_products (product_id, product_name, category_raw, price_string, stock_quantity_string)
+VALUES ('P001', 'Notebook Dell', 'Eletrônicos', 'R$ 3.500,00', '15 unidades');
 
-### Melhorias Sugeridas
+-- Consulta para análise de qualidade
+SELECT 
+    COUNT(*) as total_records,
+    COUNT(DISTINCT product_id) as unique_products,
+    MIN(load_timestamp) as first_load,
+    MAX(load_timestamp) as last_load
+FROM raw_products;
+```
 
-- Adicionar coluna `source_system` para identificar origem dos dados
-- Incluir coluna `batch_id` para rastreamento de lotes de carga
-- Considerar adicionar coluna `raw_record` (JSON/TEXT) com registro completo original
+---
+
+**Versão da Documentação**: 1.0  
+**Última Atualização**: 2024  
+**Camada**: Raw/Bronze
